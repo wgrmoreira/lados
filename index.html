@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#13141f">
+    <title>Lados!</title>
+    <style>
+        :root {
+            --bg-color: #13141f;
+            --text-color: #ffffff;
+            --primary: #5bc0eb;
+            --secondary: #b461f3;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            color: var(--text-color);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+            transition: background-image 0.5s ease;
+        }
+
+        /* --- TELAS DA UI --- */
+        .screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(19, 20, 31, 0.9);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #start-screen h1 {
+            font-size: 4.5rem;
+            margin-bottom: 20px;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.8);
+            background: linear-gradient(45deg, #ff5a5a, #ffc13b, #5bd55b, #5bc0eb, #b461f3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 900;
+            letter-spacing: 2px;
+        }
+
+        .floating-hexes {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .hex-icon {
+            width: 45px; height: 50px;
+            background-color: var(--primary);
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            animation: float 2s infinite ease-in-out alternate;
+            box-shadow: 0 10px 10px rgba(0,0,0,0.5);
+            border-radius: 8px;
+        }
+        .hex-icon:nth-child(2) { animation-delay: 0.3s; background-color: #5bd55b; }
+        .hex-icon:nth-child(3) { animation-delay: 0.6s; background-color: #ff5a5a; }
+
+        @keyframes float {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-15px); }
+        }
+
+        .modal {
+            background: rgba(37, 39, 60, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 90%;
+            width: 350px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.8);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .screen:not(.hidden) .modal { transform: scale(1); }
+
+        .modal h2 { font-size: 28px; margin-bottom: 15px; color: var(--primary); }
+        .modal p { font-size: 16px; line-height: 1.5; margin-bottom: 15px; color: #d0d2e8; }
+        
+        button {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: #fff;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 5px 15px rgba(180, 97, 243, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 15px;
+            flex-shrink: 0;
+        }
+        button:active { transform: scale(0.95); }
+
+        /* --- TELA DE GAME OVER - PONTUAÇÕES POR COR --- */
+        #color-scores-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding-right: 5px;
+        }
+        
+        #color-scores-container::-webkit-scrollbar { width: 5px; }
+        #color-scores-container::-webkit-scrollbar-thumb { background: #b461f3; border-radius: 5px; }
+
+        .color-score-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 8px 15px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .mini-hex {
+            width: 22px; height: 25px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            box-shadow: inset 0 -3px 0 rgba(0,0,0,0.3);
+        }
+        .color-score-val {
+            font-weight: 900;
+            font-size: 18px;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .total-score-text {
+            font-size: 26px; 
+            margin-top: 10px; 
+            margin-bottom: 5px;
+            color: #ffc13b;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            font-weight: 900;
+        }
+
+        /* --- POPUPS NO JOGO --- */
+        .popup-text {
+            position: absolute;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            font-weight: 900;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 50;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-align: center;
+            width: 100%;
+        }
+        
+        #milestone-popup {
+            top: 40%;
+            font-size: 38px;
+            color: #ffc13b;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.8), 0 0 20px #ffc13b;
+        }
+        #milestone-popup.show { opacity: 1; transform: translate(-50%, -80%) scale(1); }
+
+        #special-popup {
+            top: 25%;
+            font-size: 32px;
+        }
+        #special-popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        
+        .text-coringa { color: #ffffff; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 25px rgba(255,255,255,0.8); }
+        .text-buraco { color: #555555; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 25px #ff0000; }
+
+        /* --- HUD DO JOGO --- */
+        header {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 600px;
+            padding: 15px 20px;
+            z-index: 10;
+        }
+
+        .score-box {
+            background: rgba(37, 39, 60, 0.7);
+            backdrop-filter: blur(3px);
+            padding: 10px 15px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            min-width: 100px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .score-box span { display: block; font-size: 11px; text-transform: uppercase; color: #a4a7c9; letter-spacing: 1px;}
+        .score-box strong { display: block; font-size: 22px; font-weight: 900; margin-top: 3px; font-variant-numeric: tabular-nums;}
+
+        #game-container {
+            flex: 1;
+            width: 100%;
+            max-width: 600px;
+            position: relative;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+    </style>
+</head>
+<body>
+
+    <audio id="bg-music" src="assets/music/lofi ff7.mp3" loop preload="auto"></audio>
+
+    <div id="start-screen" class="screen">
+        <div class="floating-hexes">
+            <div class="hex-icon"></div>
+            <div class="hex-icon"></div>
+            <div class="hex-icon"></div>
+        </div>
+        <h1>Lados!</h1>
+        <button onclick="showRules()">Iniciar</button>
+    </div>
+
+    <div id="rules-screen" class="screen hidden">
+        <div class="modal">
+            <h2>Como Jogar</h2>
+            <p>Conecte 3 ou mais hexágonos da mesma cor para estourá-los.</p>
+            <p><strong>Dicas Especiais:</strong> A cada 1000 pontos você ganha uma <strong>Peça Coringa</strong> (Branca) ou <strong>Buraco Negro</strong> (Sugador). Fique de olho nos encaixes superiores!</p>
+            <button onclick="startGame()">Jogar</button>
+        </div>
+    </div>
+
+    <div id="game-over-screen" class="screen hidden">
+        <div class="modal">
+            <h2 style="color: #ff5a5a;">Fim da Linha!</h2>
+            <div id="color-scores-container">
+                </div>
+            <div class="total-score-text">Total: <span id="finalScore">0</span></div>
+            <button onclick="resetGame()" style="background: linear-gradient(135deg, #ff5a5a, #ff9b5a);">Tentar Novamente</button>
+        </div>
+    </div>
+
+    <header>
+        <div class="score-box">
+            <span>Pontos</span>
+            <strong id="scoreDisplay">0</strong>
+        </div>
+        <div class="score-box">
+            <span>Recorde</span>
+            <strong id="highScoreDisplay">0</strong>
+        </div>
+    </header>
+
+    <div id="game-container">
+        <div id="milestone-popup" class="popup-text">Excelente!</div>
+        <div id="special-popup" class="popup-text">Peça Coringa!</div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // --- VARIÁVEIS DO SISTEMA ---
+        const startScreen = document.getElementById('start-screen');
+        const rulesScreen = document.getElementById('rules-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const colorScoresContainer = document.getElementById('color-scores-container');
+        const bgMusic = document.getElementById('bg-music');
+        const milestonePopup = document.getElementById('milestone-popup');
+        const specialPopup = document.getElementById('special-popup');
+        
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+        
+        let width, height;
+        
+        const gridSize = 36; 
+        const drawSizeOffset = 4; 
+        const boardRadius = 3; 
+        const scaleY = 0.75; 
+        
+        let board = new Map();
+        let tray = []; 
+        let specialSlots = []; 
+        let score = 0;
+        let colorScores = {}; // Armazena a pontuação separada por cor
+        let nextSpecialScore = 1000;
+        let lastMilestone = 0;
+        
+        let highScore = localStorage.getItem('ladosHighScore') || 0;
+        highScoreDisplay.innerText = highScore;
+        
+        let isPlaying = false;
+        let animatingPieces = [];
+        let scoreAnimInterval = null;
+
+        let stars = [];
+        let comets = [];
+        for(let i=0; i<60; i++) {
+            stars.push({ x: Math.random(), y: Math.random(), s: Math.random() * 1.5 + 0.5, speed: Math.random() * 0.003 + 0.001, offset: Math.random() * Math.PI * 2 });
+        }
+
+        const PRAISE_PHRASES = ["Excelente!", "Incrível!", "Você é demais!", "Sensacional!", "Brilhante!", "Fantástico!", "Genial!", "Muito bom!", "Espetacular!", "Magnífico!", "Mestre!", "Supremo!", "Fenomenal!"];
+
+        const BASE_PALETTE = [
+            { top: '#5bd55b', side: '#2d992d' },
+            { top: '#ff5a5a', side: '#b32d2d' },
+            { top: '#5bc0eb', side: '#2d84a6' },
+            { top: '#ffc13b', side: '#b3801a' },
+            { top: '#b461f3', side: '#7531a6' }
+        ];
+        
+        const UNLOCKABLE_COLORS = [
+            { threshold: 1000, top: '#ff8c00', side: '#b35900' },
+            { threshold: 3000, top: '#ff69b4', side: '#b33e75' },
+            { threshold: 5000, top: '#00008b', side: '#00004d' },
+            { threshold: 8000, top: '#8b0000', side: '#4d0000' },
+            { threshold: 10000, top: '#006400', side: '#003300' }
+        ];
+
+        const SHAPES = [
+            [{q: 0, r: 0}], 
+            [{q: 0, r: 0}, {q: 1, r: -1}], 
+            [{q: 0, r: 0}, {q: 1, r: 0}],  
+            [{q: 0, r: 0}, {q: 0, r: 1}],  
+            [{q: 0, r: 0}, {q: 1, r: 0}, {q: 0, r: 1}], 
+            [{q: 0, r: 0}, {q: 1, r: -1}, {q: 1, r: 0}] 
+        ];
+
+        // --- SISTEMA DE ÁUDIO DE EFEITOS ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'btn') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, now); osc.frequency.exponentialRampToValueAtTime(900, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'pick') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now); osc.frequency.linearRampToValueAtTime(500, now + 0.05);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.05);
+                osc.start(now); osc.stop(now + 0.05);
+            } else if (type === 'place') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(300, now); osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'match') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+                gain.gain.setValueAtTime(0.4, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'bomb') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now + 0.4);
+                gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.start(now); osc.stop(now + 0.4);
+            } else if (type === 'tick') {
+                // Som de tique-taque para a contagem de pontos
+                osc.type = 'square'; osc.frequency.setValueAtTime(800, now);
+                gain.gain.setValueAtTime(0.05, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+                osc.start(now); osc.stop(now + 0.05);
+            } else if (type === 'gameover') {
+                // Efeito de Game Over (descendo a escala)
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now + 1.2);
+                gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
+                osc.start(now); osc.stop(now + 1.2);
+            }
+        }
+
+        // --- FUNÇÃO RANDOM DE FUNDO ---
+        function randomizeBackground() {
+            const bgs = ['assets/img/espaco.png', 'assets/img/black.png'];
+            const bg = bgs[Math.floor(Math.random() * bgs.length)];
+            document.body.style.backgroundImage = `url('${bg}')`;
+        }
+
+        window.showRules = function() {
+            initAudio(); playSound('btn');
+            startScreen.classList.add('hidden');
+            rulesScreen.classList.remove('hidden');
+            bgMusic.play().catch(() => {});
+        };
+
+        window.startGame = function() {
+            playSound('btn');
+            rulesScreen.classList.add('hidden');
+            isPlaying = true;
+            resetGameLogic();
+            bgMusic.play().catch(() => {});
+        };
+
+        window.resetGame = function() {
+            playSound('btn');
+            if (scoreAnimInterval) clearInterval(scoreAnimInterval);
+            gameOverScreen.classList.add('hidden');
+            isPlaying = true;
+            resetGameLogic();
+        };
+
+        // --- MATEMÁTICA HEXAGONAL ---
+        function getHexCenter(q, r, offsetX, offsetY, customSize = gridSize) {
+            const x = offsetX + (Math.sqrt(3) * q + Math.sqrt(3)/2 * r) * customSize;
+            const y = offsetY + (3/2 * r) * customSize * scaleY;
+            return { x, y };
+        }
+
+        function pixelToAxial(px, py, offsetX, offsetY, customSize = gridSize) {
+            const x = px - offsetX;
+            const y = (py - offsetY) / scaleY;
+            const q = (Math.sqrt(3)/3 * x - 1/3 * y) / customSize;
+            const r = (2/3 * y) / customSize;
+            
+            const z = -q - r;
+            let rq = Math.round(q);
+            let rr = Math.round(r);
+            let rz = Math.round(z);
+            if (Math.abs(rq - q) > Math.abs(rr - r) && Math.abs(rq - q) > Math.abs(rz - z)) rq = -rr - rz;
+            else if (Math.abs(rr - r) > Math.abs(rz - z)) rr = -rq - rz;
+            return { q: rq, r: rr };
+        }
+
+        function getHexPoints(size) {
+            let pts = [];
+            for(let i=0; i<6; i++) {
+                let angle = Math.PI / 180 * (60 * i + 30);
+                pts.push({ x: size * Math.cos(angle), y: size * Math.sin(angle) * scaleY });
+            }
+            return pts;
+        }
+
+        // --- RENDERIZAÇÃO ESTÉTICA ---
+        function drawCuteHex(ctx, x, y, size, colorObj, isBoard = false, alpha = 1) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.globalAlpha = alpha;
+            ctx.lineJoin = 'round';
+            const pts = getHexPoints(size);
+
+            if (isBoard) {
+                ctx.beginPath();
+                pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(21, 23, 38, 0.6)'; 
+                ctx.fill();
+                ctx.lineWidth = size * 0.22;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                ctx.stroke();
+                ctx.lineWidth = size * 0.08;
+                ctx.strokeStyle = 'rgba(10, 10, 20, 0.8)';
+                ctx.stroke();
+                ctx.restore();
+                return;
+            }
+
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetY = 8;
+
+            ctx.lineWidth = size * 0.25;
+            ctx.beginPath();
+            pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y + (size * 0.25)) : ctx.lineTo(p.x, p.y + (size * 0.25)));
+            ctx.closePath();
+            ctx.fillStyle = colorObj.side;
+            ctx.fill();
+            ctx.strokeStyle = colorObj.side;
+            ctx.stroke();
+
+            ctx.shadowColor = 'transparent';
+
+            ctx.beginPath();
+            pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.fillStyle = colorObj.top;
+            ctx.fill();
+            ctx.lineWidth = size * 0.15;
+            ctx.strokeStyle = colorObj.top;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // --- LÓGICA DO JOGO ---
+        function initBoard() {
+            board.clear();
+            for (let q = -boardRadius; q <= boardRadius; q++) {
+                let r1 = Math.max(-boardRadius, -q - boardRadius);
+                let r2 = Math.min(boardRadius, -q + boardRadius);
+                for (let r = r1; r <= r2; r++) {
+                    board.set(`${q},${r}`, { q, r, colorObj: null });
+                }
+            }
+        }
+
+        function getTrayPositions() {
+            return [ { x: width * 0.2, y: height - 90 }, { x: width * 0.5, y: height - 90 }, { x: width * 0.8, y: height - 90 } ];
+        }
+
+        function getSpecialTrayPositions() {
+            return [ { x: width * 0.35, y: 80 }, { x: width * 0.5, y: 80 }, { x: width * 0.65, y: 80 } ];
+        }
+
+        function getAvailablePalette() {
+            let activeColors = [...BASE_PALETTE];
+            UNLOCKABLE_COLORS.forEach(color => { if (score >= color.threshold) activeColors.push(color); });
+            return activeColors;
+        }
+
+        function generateRandomBlock() {
+            const currentPalette = getAvailablePalette();
+            const shapeTemplate = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            const len = shapeTemplate.length;
+            let colors = [];
+
+            if (len === 3) {
+                const rand = Math.random();
+                if (rand < 0.1) {
+                    let c = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+                    colors = [c, c, c];
+                } else if (rand < 0.6) {
+                    let c1 = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+                    let c2 = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+                    while(c1 === c2) c2 = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+                    colors = [c1, c1, c2].sort(() => Math.random() - 0.5);
+                } else {
+                    for(let i=0; i<3; i++) colors.push(currentPalette[Math.floor(Math.random() * currentPalette.length)]);
+                }
+            } else if (len === 2) {
+                if (Math.random() < 0.5) {
+                    let c = currentPalette[Math.floor(Math.random() * currentPalette.length)];
+                    colors = [c, c];
+                } else {
+                    colors = [currentPalette[Math.floor(Math.random() * currentPalette.length)], currentPalette[Math.floor(Math.random() * currentPalette.length)]];
+                }
+            } else {
+                colors = [currentPalette[Math.floor(Math.random() * currentPalette.length)]];
+            }
+
+            return { shape: shapeTemplate.map(n => ({...n})), colors: colors };
+        }
+
+        function refillTray() {
+            if (tray.filter(p => p !== null).length === 0) {
+                for (let i = 0; i < 3; i++) tray[i] = generateRandomBlock();
+            }
+        }
+
+        function grantSpecial() {
+            let isBomb = Math.random() < 0.4;
+            let special = isBomb ? { top: '#292929', side: '#111111', type: 'bomb' } : { top: '#ffffff', side: '#cccccc', type: 'wildcard' };
+            if (specialSlots.length >= 3) specialSlots.shift(); 
+            specialSlots.push({ shape: [{q:0, r:0}], colors: [special] });
+            showSpecialPopup(isBomb);
+        }
+
+        function resetGameLogic() {
+            randomizeBackground();
+            score = 0;
+            colorScores = {}; // Limpa os recordes por cor
+            nextSpecialScore = 1000;
+            lastMilestone = 0;
+            scoreDisplay.innerText = score;
+            specialSlots = [];
+            initBoard();
+            tray = [];
+            refillTray();
+            animatingPieces = [];
+        }
+
+        let boardOffsetX, boardOffsetY;
+        function resize() {
+            width = canvas.width = document.getElementById('game-container').clientWidth;
+            height = canvas.height = document.getElementById('game-container').clientHeight;
+            boardOffsetX = width / 2;
+            boardOffsetY = height / 2 - 15;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- ARRASTE E INTERAÇÃO ---
+        let draggingBlock = null;
+        let mousePos = { x: 0, y: 0 };
+
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let cx = e.clientX, cy = e.clientY;
+            if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+            return { x: cx - rect.left, y: cy - rect.top };
+        }
+
+        function handleDown(e) {
+            if (!isPlaying) return;
+            const pos = getEventPos(e);
+            
+            const trayPos = getTrayPositions();
+            for (let i = 0; i < 3; i++) {
+                if (tray[i] && Math.hypot(pos.x - trayPos[i].x, pos.y - trayPos[i].y) < gridSize * 2.5) {
+                    draggingBlock = { index: i, source: 'tray', block: tray[i], x: pos.x, y: pos.y };
+                    mousePos = pos; tray[i] = null; playSound('pick'); return;
+                }
+            }
+
+            const specPos = getSpecialTrayPositions();
+            for (let i = 0; i < specialSlots.length; i++) {
+                if (specialSlots[i] && Math.hypot(pos.x - specPos[i].x, pos.y - specPos[i].y) < gridSize * 2) {
+                    draggingBlock = { index: i, source: 'special', block: specialSlots[i], x: pos.x, y: pos.y };
+                    mousePos = pos; specialSlots.splice(i, 1); playSound('pick'); return;
+                }
+            }
+        }
+
+        function handleMove(e) {
+            if (!draggingBlock) return;
+            e.preventDefault();
+            mousePos = getEventPos(e);
+            draggingBlock.x = mousePos.x;
+            draggingBlock.y = mousePos.y - 80; 
+        }
+
+        function handleUp(e) {
+            if (!draggingBlock) return;
+            const baseCoords = pixelToAxial(draggingBlock.x, draggingBlock.y, boardOffsetX, boardOffsetY);
+            
+            let canPlace = true;
+            for (let node of draggingBlock.block.shape) {
+                const key = `${baseCoords.q + node.q},${baseCoords.r + node.r}`;
+                if (!board.has(key) || board.get(key).colorObj !== null) { canPlace = false; break; }
+            }
+
+            if (canPlace) {
+                processPlacement(baseCoords, draggingBlock.block);
+            } else {
+                if (draggingBlock.source === 'tray') tray[draggingBlock.index] = draggingBlock.block;
+                else specialSlots.splice(draggingBlock.index, 0, draggingBlock.block);
+            }
+            draggingBlock = null;
+        }
+
+        canvas.addEventListener('mousedown', handleDown);
+        canvas.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+        canvas.addEventListener('touchstart', handleDown, {passive: false});
+        canvas.addEventListener('touchmove', handleMove, {passive: false});
+        window.addEventListener('touchend', handleUp);
+
+        function getNeighbors(q, r) {
+            return [{q:q+1,r:r}, {q:q+1,r:r-1}, {q:q,r:r-1}, {q:q-1,r:r}, {q:q-1,r:r+1}, {q:q,r:r+1}];
+        }
+
+        function floodFill(q, r, targetColorObj, visited, connected) {
+            const key = `${q},${r}`;
+            if (visited.has(key)) return;
+            visited.add(key);
+            if (board.has(key)) {
+                let h = board.get(key);
+                if (h.colorObj && (h.colorObj === targetColorObj || h.colorObj.type === 'wildcard')) {
+                    connected.push({q, r});
+                    getNeighbors(q, r).forEach(n => floodFill(n.q, n.r, targetColorObj, visited, connected));
+                }
+            }
+        }
+
+        function getMatchesFor(startQ, startR) {
+             let node = board.get(`${startQ},${startR}`);
+             if (!node || !node.colorObj) return [];
+             let allMatches = [];
+             
+             if (node.colorObj.type === 'wildcard') {
+                 let colorsAround = new Set();
+                 getNeighbors(startQ, startR).forEach(n => {
+                     let h = board.get(`${n.q},${n.r}`);
+                     if (h && h.colorObj && !h.colorObj.type) colorsAround.add(h.colorObj);
+                 });
+                 colorsAround.forEach(color => {
+                     let visited = new Set(); let connected = [];
+                     floodFill(startQ, startR, color, visited, connected);
+                     if (connected.length >= 3) connected.forEach(c => allMatches.push(c));
+                 });
+             } else {
+                 let visited = new Set(); let connected = [];
+                 floodFill(startQ, startR, node.colorObj, visited, connected);
+                 if (connected.length >= 3) connected.forEach(c => allMatches.push(c));
+             }
+             return allMatches;
+        }
+
+        function processPlacement(baseCoords, block) {
+            block.shape.forEach((node, idx) => {
+                board.get(`${baseCoords.q + node.q},${baseCoords.r + node.r}`).colorObj = block.colors[idx];
+            });
+
+            let toDestroy = new Map();
+            let usedBomb = false;
+
+            block.shape.forEach((node, idx) => {
+                let q = baseCoords.q + node.q; let r = baseCoords.r + node.r; let color = block.colors[idx];
+                if (color.type === 'bomb') {
+                    usedBomb = true;
+                    toDestroy.set(`${q},${r}`, {q, r});
+                    getNeighbors(q, r).forEach(n => {
+                        if (board.has(`${n.q},${n.r}`) && board.get(`${n.q},${n.r}`).colorObj) {
+                            toDestroy.set(`${n.q},${n.r}`, {q: n.q, r: n.r});
+                        }
+                    });
+                } else {
+                    let matches = getMatchesFor(q, r);
+                    matches.forEach(m => toDestroy.set(`${m.q},${m.r}`, m));
+                }
+            });
+
+            if (toDestroy.size > 0) {
+                playSound(usedBomb ? 'bomb' : 'match');
+                
+                let numDestroyed = toDestroy.size;
+                let pts = (numDestroyed * 10) + (numDestroyed > 3 ? (numDestroyed - 3) * 15 : 0);
+                let ptsPerHex = pts / numDestroyed;
+
+                toDestroy.forEach((hex, key) => {
+                    let h = board.get(key);
+                    // Armazena pontos apenas se for uma cor normal (ignora bombas/coringas no visual final)
+                    if (h.colorObj && !h.colorObj.type) {
+                        colorScores[h.colorObj.top] = (colorScores[h.colorObj.top] || 0) + ptsPerHex;
+                    }
+                    animatingPieces.push({ q: hex.q, r: hex.r, colorObj: h.colorObj, scale: 1, alpha: 1, angle: 0 });
+                    h.colorObj = null;
+                });
+                
+                addScore(pts);
+            } else {
+                playSound('place');
+            }
+
+            refillTray();
+            if (checkGameOver()) showGameOver();
+        }
+
+        function addScore(pts) {
+            score += pts;
+            scoreDisplay.innerText = score;
+            
+            if (score > highScore) {
+                highScore = score;
+                highScoreDisplay.innerText = highScore;
+                localStorage.setItem('ladosHighScore', highScore);
+            }
+            
+            let currentMilestone = Math.floor(score / 200);
+            if (currentMilestone > lastMilestone) {
+                showMilestonePopup();
+                lastMilestone = currentMilestone;
+            }
+
+            while (score >= nextSpecialScore) {
+                grantSpecial();
+                nextSpecialScore += 1000;
+            }
+        }
+
+        function checkGameOver() {
+            // Verifica Bandeja Inferior + Slots Especiais
+            let piecesToCheck = [];
+            tray.forEach(p => { if (p) piecesToCheck.push(p); });
+            specialSlots.forEach(s => { if (s && s.colors) piecesToCheck.push(s); });
+            
+            if (piecesToCheck.length === 0) return false;
+
+            // Testa todas as peças em todos os hexágonos do tabuleiro
+            for (let piece of piecesToCheck) {
+                for (let [key, hex] of board) {
+                    let canPlace = true;
+                    for (let node of piece.shape) {
+                        const targetKey = `${hex.q + node.q},${hex.r + node.r}`;
+                        if (!board.has(targetKey) || board.get(targetKey).colorObj !== null) {
+                            canPlace = false;
+                            break;
+                        }
+                    }
+                    if (canPlace) return false; // Encontrou um lugar, jogo continua
+                }
+            }
+            return true; // Fim de jogo, nenhuma peça cabe em nenhum lugar
+        }
+
+        function showGameOver() {
+            isPlaying = false;
+            playSound('gameover');
+            
+            // Monta o DOM dos scores
+            colorScoresContainer.innerHTML = '';
+            let validColors = Object.keys(colorScores).sort((a,b) => colorScores[b] - colorScores[a]); // Ordena do maior pro menor
+            
+            validColors.forEach(color => {
+                let row = document.createElement('div');
+                row.className = 'color-score-row';
+                
+                let miniHex = document.createElement('div');
+                miniHex.className = 'mini-hex';
+                miniHex.style.backgroundColor = color;
+                
+                let valSpan = document.createElement('span');
+                valSpan.className = 'color-score-val';
+                valSpan.id = `score-anim-${color.replace('#', '')}`;
+                valSpan.innerText = '0';
+                
+                row.appendChild(miniHex);
+                row.appendChild(valSpan);
+                colorScoresContainer.appendChild(row);
+            });
+
+            gameOverScreen.classList.remove('hidden');
+
+            // Animação de subida dos números
+            let duration = 2000;
+            let startTime = performance.now();
+            let totalEl = document.getElementById('finalScore');
+            
+            let tickSoundInterval = setInterval(() => playSound('tick'), 120);
+
+            function update(time) {
+                let progress = (time - startTime) / duration;
+                if (progress >= 1) {
+                    progress = 1;
+                    clearInterval(tickSoundInterval);
+                    playSound('btn'); // Toca o som de encerramento
+                }
+                
+                totalEl.innerText = Math.floor(score * progress);
+                
+                validColors.forEach(c => {
+                    let el = document.getElementById(`score-anim-${c.replace('#', '')}`);
+                    if(el) el.innerText = Math.floor(colorScores[c] * progress);
+                });
+                
+                if (progress < 1) {
+                    scoreAnimInterval = requestAnimationFrame(update);
+                }
+            }
+            scoreAnimInterval = requestAnimationFrame(update);
+        }
+
+        // --- RENDER LOOP ---
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            let now = Date.now();
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(star => {
+                let alpha = 0.1 + 0.9 * Math.abs(Math.sin(now * star.speed + star.offset));
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(star.x * width, star.y * height, star.s, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+
+            if (Math.random() < 0.005) { 
+                comets.push({
+                    x: Math.random() * width, y: -20, vx: (Math.random() - 0.5) * 6, vy: Math.random() * 6 + 8, life: 1.0
+                });
+            }
+            for (let i = comets.length - 1; i >= 0; i--) {
+                let c = comets[i]; c.x += c.vx; c.y += c.vy; c.life -= 0.015; 
+                if (c.life <= 0 || c.y > height + 50) { comets.splice(i, 1); continue; }
+                
+                let tailX = c.x - c.vx * 8; let tailY = c.y - c.vy * 8;
+                let grad = ctx.createLinearGradient(c.x, c.y, tailX, tailY);
+                grad.addColorStop(0, `rgba(255, 255, 255, ${c.life})`); grad.addColorStop(1, `rgba(255, 255, 255, 0)`);
+                
+                ctx.beginPath(); ctx.strokeStyle = grad; ctx.lineWidth = 3; ctx.lineCap = 'round';
+                ctx.moveTo(c.x, c.y); ctx.lineTo(tailX, tailY); ctx.stroke();
+            }
+
+            const sortedBoard = Array.from(board.values()).sort((a, b) => a.r - b.r);
+            const boardDrawSize = gridSize - drawSizeOffset;
+
+            sortedBoard.forEach(hex => {
+                const pos = getHexCenter(hex.q, hex.r, boardOffsetX, boardOffsetY);
+                if (!hex.colorObj) drawCuteHex(ctx, pos.x, pos.y, boardDrawSize, null, true);
+            });
+
+            sortedBoard.forEach(hex => {
+                const pos = getHexCenter(hex.q, hex.r, boardOffsetX, boardOffsetY);
+                if (hex.colorObj) drawCuteHex(ctx, pos.x, pos.y, boardDrawSize, hex.colorObj, false);
+            });
+
+            for (let i = animatingPieces.length - 1; i >= 0; i--) {
+                let anim = animatingPieces[i];
+                anim.scale -= 0.05; anim.alpha -= 0.06; anim.angle += 0.25;
+                if (anim.alpha <= 0) { animatingPieces.splice(i, 1); continue; }
+                const pos = getHexCenter(anim.q, anim.r, boardOffsetX, boardOffsetY);
+                ctx.save(); ctx.translate(pos.x, pos.y); ctx.scale(anim.scale, anim.scale); ctx.rotate(anim.angle);
+                drawCuteHex(ctx, 0, 0, boardDrawSize, anim.colorObj, false, anim.alpha);
+                ctx.restore();
+            }
+
+            const trayPos = getTrayPositions();
+            for (let i = 0; i < 3; i++) {
+                if (tray[i] && (!draggingBlock || draggingBlock.index !== i || draggingBlock.source !== 'tray')) {
+                    const sortedParts = [...tray[i].shape].map((s, idx) => ({...s, colorObj: tray[i].colors[idx]})).sort((a, b) => a.r - b.r);
+                    const trayHexSize = (gridSize * 0.8) - 1;
+                    sortedParts.forEach(part => {
+                        const pos = getHexCenter(part.q, part.r, trayPos[i].x, trayPos[i].y, gridSize * 0.8);
+                        drawCuteHex(ctx, pos.x, pos.y, trayHexSize, part.colorObj, false);
+                    });
+                }
+            }
+
+            const specPos = getSpecialTrayPositions();
+            const specDrawSize = (gridSize * 0.8) - 1.5;
+            for(let i=0; i<3; i++) { drawCuteHex(ctx, specPos[i].x, specPos[i].y, gridSize * 0.8, null, true); }
+
+            for (let i = 0; i < specialSlots.length; i++) {
+                if (specialSlots[i] && (!draggingBlock || draggingBlock.index !== i || draggingBlock.source !== 'special')) {
+                    let colorObj = specialSlots[i].colors[0];
+                    drawCuteHex(ctx, specPos[i].x, specPos[i].y, specDrawSize, colorObj, false);
+                }
+            }
+
+            if (draggingBlock) {
+                const baseCoords = pixelToAxial(draggingBlock.x, draggingBlock.y, boardOffsetX, boardOffsetY);
+                let canPlace = true;
+                for (let node of draggingBlock.block.shape) {
+                    const key = `${baseCoords.q + node.q},${baseCoords.r + node.r}`;
+                    if (!board.has(key) || board.get(key).colorObj !== null) { canPlace = false; break; }
+                }
+
+                if (canPlace) {
+                    draggingBlock.block.shape.forEach((node, idx) => {
+                        const ghostPos = getHexCenter(baseCoords.q + node.q, baseCoords.r + node.r, boardOffsetX, boardOffsetY);
+                        drawCuteHex(ctx, ghostPos.x, ghostPos.y, boardDrawSize, draggingBlock.block.colors[idx], false, 0.5);
+                    });
+                }
+
+                const sortedDrag = [...draggingBlock.block.shape].map((s, idx) => ({...s, colorObj: draggingBlock.block.colors[idx]})).sort((a, b) => a.r - b.r);
+                sortedDrag.forEach(part => {
+                    const pos = getHexCenter(part.q, part.r, draggingBlock.x, draggingBlock.y, gridSize);
+                    drawCuteHex(ctx, pos.x, pos.y, boardDrawSize + 1, part.colorObj, false);
+                });
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        randomizeBackground();
+        initBoard();
+        refillTray();
+        draw();
+    </script>
+</body>
+</html>
