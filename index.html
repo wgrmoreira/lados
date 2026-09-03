@@ -176,7 +176,7 @@
             transform: translate(-50%, -50%) scale(0.5);
             font-weight: 900;
             opacity: 0;
-            pointer-events: none;
+            pointer-events: none !important; /* Força os toques passarem através do texto */
             z-index: 50;
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-align: center;
@@ -260,8 +260,7 @@
         <div class="modal">
             <h2 style="color: #ff5a5a;">Fim da Linha!</h2>
             <div id="color-scores-container">
-                <!-- Preenchido dinamicamente via JS -->
-            </div>
+                </div>
             <div class="total-score-text">Total: <span id="finalScore">0</span></div>
             <button onclick="resetGame()" style="background: linear-gradient(135deg, #ff5a5a, #ff9b5a);">Tentar Novamente</button>
         </div>
@@ -318,7 +317,7 @@
         highScoreDisplay.innerText = highScore;
         
         let isPlaying = false;
-        let isProcessing = false; // NOVA TRAVA: Impede toque enquanto avalia o match
+        let isProcessing = false; // Trava o toque enquanto a peça finaliza o encaixe
         let animatingPieces = [];
         let scoreAnimInterval = null;
 
@@ -401,7 +400,6 @@
             }
         }
 
-        // --- FULLSCREEN API ---
         function enterFullScreen() {
             let elem = document.documentElement;
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -413,7 +411,6 @@
             }
         }
 
-        // --- FUNÇÃO RANDOM DE FUNDO ---
         function randomizeBackground() {
             const bgs = ['assets/img/espaco.png', 'assets/img/black.png'];
             const bg = bgs[Math.floor(Math.random() * bgs.length)];
@@ -540,7 +537,9 @@
         }
 
         function getTrayPositions() {
-            return [ { x: width * 0.2, y: height - 120 }, { x: width * 0.5, y: height - 120 }, { x: width * 0.8, y: height - 120 } ];
+            // Bandeja levemente deslocada para a esquerda (0.14, 0.44, 0.74) 
+            // para evitar corte na direita em telas menores.
+            return [ { x: width * 0.14, y: height - 120 }, { x: width * 0.44, y: height - 120 }, { x: width * 0.74, y: height - 120 } ];
         }
 
         function getSpecialTrayPositions() {
@@ -637,8 +636,8 @@
         }
 
         function handleDown(e) {
-            if (!isPlaying || isProcessing) return;
-            if (e.cancelable) e.preventDefault(); // Previne toques duplicados e scrolls nativos
+            if (!isPlaying || isProcessing || draggingBlock) return;
+            if (e.cancelable) e.preventDefault();
             
             const pos = getEventPos(e);
             
@@ -670,7 +669,7 @@
 
         function handleUp(e) {
             if (!draggingBlock || isProcessing) return;
-            if (e.cancelable) e.preventDefault();
+            if (e && e.cancelable) e.preventDefault();
             
             const baseCoords = pixelToAxial(draggingBlock.x, draggingBlock.y, boardOffsetX, boardOffsetY);
             
@@ -689,12 +688,14 @@
             draggingBlock = null;
         }
 
+        // Os eventos de touchcancel evitam peças ficarem presas caso um engasgo cancele o evento (ex. popup)
         canvas.addEventListener('mousedown', handleDown);
         canvas.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
         canvas.addEventListener('touchstart', handleDown, {passive: false});
         canvas.addEventListener('touchmove', handleMove, {passive: false});
         window.addEventListener('touchend', handleUp, {passive: false});
+        window.addEventListener('touchcancel', handleUp, {passive: false});
 
         function getNeighbors(q, r) {
             return [{q:q+1,r:r}, {q:q+1,r:r-1}, {q:q,r:r-1}, {q:q-1,r:r}, {q:q-1,r:r+1}, {q:q,r:r+1}];
@@ -737,66 +738,64 @@
              return allMatches;
         }
 
-        // --- SISTEMA DE ENCAIXE COM DELAY (Evita pontuar sem o jogador ver a peça travar na mesa) ---
         function processPlacement(baseCoords, block) {
-            isProcessing = true; // Impede interações enquanto resolve a jogada
+            isProcessing = true; // Bloqueia toque
             
-            // 1. Encaixa e RENDERIZA a peça imediatamente
+            // 1. Encaixe imediato visual
             block.shape.forEach((node, idx) => {
                 board.get(`${baseCoords.q + node.q},${baseCoords.r + node.r}`).colorObj = block.colors[idx];
             });
-            playSound('place'); // Dá o clique inicial
+            playSound('place');
 
-            // 2. Espera um pouco (300ms) para gerar a satisfação visual do encaixe, E DEPOIS explode/pontua.
+            // 2. Delay para apreciar o encaixe antes de avaliar combinação
             setTimeout(() => {
-                let toDestroy = new Map();
-                let usedBomb = false;
+                try {
+                    let toDestroy = new Map();
+                    let usedBomb = false;
 
-                block.shape.forEach((node, idx) => {
-                    let q = baseCoords.q + node.q; let r = baseCoords.r + node.r; let color = block.colors[idx];
-                    
-                    if (color.type === 'bomb') {
-                        usedBomb = true;
-                        toDestroy.set(`${q},${r}`, {q, r});
-                        getNeighbors(q, r).forEach(n => {
-                            if (board.has(`${n.q},${n.r}`) && board.get(`${n.q},${n.r}`).colorObj) {
-                                toDestroy.set(`${n.q},${n.r}`, {q: n.q, r: n.r});
-                            }
-                        });
-                    } else {
-                        let matches = getMatchesFor(q, r);
-                        matches.forEach(m => toDestroy.set(`${m.q},${m.r}`, m));
-                    }
-                });
-
-                if (toDestroy.size > 0) {
-                    playSound(usedBomb ? 'bomb' : 'match'); // Som de pontuação apenas se combinar
-                    
-                    let numDestroyed = toDestroy.size;
-                    let pts = (numDestroyed * 10) + (numDestroyed > 3 ? (numDestroyed - 3) * 15 : 0);
-                    let ptsPerHex = pts / numDestroyed;
-
-                    toDestroy.forEach((hex, key) => {
-                        let h = board.get(key);
-                        if (h && h.colorObj) {
-                            if (!h.colorObj.type) {
-                                colorScores[h.colorObj.top] = (colorScores[h.colorObj.top] || 0) + ptsPerHex;
-                            }
-                            animatingPieces.push({ q: hex.q, r: hex.r, colorObj: h.colorObj, scale: 1, alpha: 1, angle: 0 });
-                            h.colorObj = null; // Remove a peça do tabuleiro para ela sumir
+                    block.shape.forEach((node, idx) => {
+                        let q = baseCoords.q + node.q; let r = baseCoords.r + node.r; let color = block.colors[idx];
+                        if (color.type === 'bomb') {
+                            usedBomb = true;
+                            toDestroy.set(`${q},${r}`, {q, r});
+                            getNeighbors(q, r).forEach(n => {
+                                if (board.has(`${n.q},${n.r}`) && board.get(`${n.q},${n.r}`).colorObj) {
+                                    toDestroy.set(`${n.q},${n.r}`, {q: n.q, r: n.r});
+                                }
+                            });
+                        } else {
+                            let matches = getMatchesFor(q, r);
+                            matches.forEach(m => toDestroy.set(`${m.q},${m.r}`, m));
                         }
                     });
-                    
-                    addScore(pts);
+
+                    if (toDestroy.size > 0) {
+                        playSound(usedBomb ? 'bomb' : 'match');
+                        
+                        let numDestroyed = toDestroy.size;
+                        let pts = (numDestroyed * 10) + (numDestroyed > 3 ? (numDestroyed - 3) * 15 : 0);
+                        let ptsPerHex = pts / numDestroyed;
+
+                        toDestroy.forEach((hex, key) => {
+                            let h = board.get(key);
+                            if (h && h.colorObj) {
+                                if (!h.colorObj.type) {
+                                    colorScores[h.colorObj.top] = (colorScores[h.colorObj.top] || 0) + ptsPerHex;
+                                }
+                                animatingPieces.push({ q: hex.q, r: hex.r, colorObj: h.colorObj, scale: 1, alpha: 1, angle: 0 });
+                                h.colorObj = null; 
+                            }
+                        });
+                        addScore(pts);
+                    }
+                } catch(e) {
+                    console.error("Erro no processo de pontuação", e);
+                } finally {
+                    refillTray();
+                    isProcessing = false; // Libera toque
+                    if (checkGameOver()) showGameOver();
                 }
-
-                refillTray();
-                isProcessing = false; // Libera interações
-                
-                // Valida o Fim de Jogo apenas após a tela e os blocos estabilizarem
-                if (checkGameOver()) showGameOver();
-
-            }, 300); 
+            }, 150); // Delay curto
         }
 
         function addScore(pts) {
