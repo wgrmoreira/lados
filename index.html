@@ -260,7 +260,8 @@
         <div class="modal">
             <h2 style="color: #ff5a5a;">Fim da Linha!</h2>
             <div id="color-scores-container">
-                </div>
+                <!-- Preenchido dinamicamente via JS -->
+            </div>
             <div class="total-score-text">Total: <span id="finalScore">0</span></div>
             <button onclick="resetGame()" style="background: linear-gradient(135deg, #ff5a5a, #ff9b5a);">Tentar Novamente</button>
         </div>
@@ -309,7 +310,7 @@
         let tray = []; 
         let specialSlots = []; 
         let score = 0;
-        let colorScores = {}; // Armazena a pontuação separada por cor
+        let colorScores = {}; 
         let nextSpecialScore = 1000;
         let lastMilestone = 0;
         
@@ -317,6 +318,7 @@
         highScoreDisplay.innerText = highScore;
         
         let isPlaying = false;
+        let isProcessing = false; // NOVA TRAVA: Impede toque enquanto avalia o match
         let animatingPieces = [];
         let scoreAnimInterval = null;
 
@@ -389,15 +391,25 @@
                 gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
                 osc.start(now); osc.stop(now + 0.4);
             } else if (type === 'tick') {
-                // Som de tique-taque para a contagem de pontos
                 osc.type = 'square'; osc.frequency.setValueAtTime(800, now);
                 gain.gain.setValueAtTime(0.05, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
                 osc.start(now); osc.stop(now + 0.05);
             } else if (type === 'gameover') {
-                // Efeito de Game Over (descendo a escala)
                 osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now + 1.2);
                 gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
                 osc.start(now); osc.stop(now + 1.2);
+            }
+        }
+
+        // --- FULLSCREEN API ---
+        function enterFullScreen() {
+            let elem = document.documentElement;
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen().catch(err => console.log(err));
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                }
             }
         }
 
@@ -410,6 +422,7 @@
 
         window.showRules = function() {
             initAudio(); playSound('btn');
+            enterFullScreen(); 
             startScreen.classList.add('hidden');
             rulesScreen.classList.remove('hidden');
             bgMusic.play().catch(() => {});
@@ -417,6 +430,7 @@
 
         window.startGame = function() {
             playSound('btn');
+            enterFullScreen(); 
             rulesScreen.classList.add('hidden');
             isPlaying = true;
             resetGameLogic();
@@ -526,11 +540,11 @@
         }
 
         function getTrayPositions() {
-            return [ { x: width * 0.2, y: height - 90 }, { x: width * 0.5, y: height - 90 }, { x: width * 0.8, y: height - 90 } ];
+            return [ { x: width * 0.2, y: height - 120 }, { x: width * 0.5, y: height - 120 }, { x: width * 0.8, y: height - 120 } ];
         }
 
         function getSpecialTrayPositions() {
-            return [ { x: width * 0.35, y: 80 }, { x: width * 0.5, y: 80 }, { x: width * 0.65, y: 80 } ];
+            return [ { x: width * 0.35, y: 70 }, { x: width * 0.5, y: 70 }, { x: width * 0.65, y: 70 } ];
         }
 
         function getAvailablePalette() {
@@ -589,7 +603,7 @@
         function resetGameLogic() {
             randomizeBackground();
             score = 0;
-            colorScores = {}; // Limpa os recordes por cor
+            colorScores = {}; 
             nextSpecialScore = 1000;
             lastMilestone = 0;
             scoreDisplay.innerText = score;
@@ -598,6 +612,7 @@
             tray = [];
             refillTray();
             animatingPieces = [];
+            isProcessing = false;
         }
 
         let boardOffsetX, boardOffsetY;
@@ -605,7 +620,7 @@
             width = canvas.width = document.getElementById('game-container').clientWidth;
             height = canvas.height = document.getElementById('game-container').clientHeight;
             boardOffsetX = width / 2;
-            boardOffsetY = height / 2 - 15;
+            boardOffsetY = height / 2 - 40;
         }
         window.addEventListener('resize', resize);
         resize();
@@ -622,7 +637,9 @@
         }
 
         function handleDown(e) {
-            if (!isPlaying) return;
+            if (!isPlaying || isProcessing) return;
+            if (e.cancelable) e.preventDefault(); // Previne toques duplicados e scrolls nativos
+            
             const pos = getEventPos(e);
             
             const trayPos = getTrayPositions();
@@ -643,15 +660,18 @@
         }
 
         function handleMove(e) {
-            if (!draggingBlock) return;
-            e.preventDefault();
+            if (!draggingBlock || isProcessing) return;
+            if (e.cancelable) e.preventDefault();
+            
             mousePos = getEventPos(e);
             draggingBlock.x = mousePos.x;
             draggingBlock.y = mousePos.y - 80; 
         }
 
         function handleUp(e) {
-            if (!draggingBlock) return;
+            if (!draggingBlock || isProcessing) return;
+            if (e.cancelable) e.preventDefault();
+            
             const baseCoords = pixelToAxial(draggingBlock.x, draggingBlock.y, boardOffsetX, boardOffsetY);
             
             let canPlace = true;
@@ -674,7 +694,7 @@
         window.addEventListener('mouseup', handleUp);
         canvas.addEventListener('touchstart', handleDown, {passive: false});
         canvas.addEventListener('touchmove', handleMove, {passive: false});
-        window.addEventListener('touchend', handleUp);
+        window.addEventListener('touchend', handleUp, {passive: false});
 
         function getNeighbors(q, r) {
             return [{q:q+1,r:r}, {q:q+1,r:r-1}, {q:q,r:r-1}, {q:q-1,r:r}, {q:q-1,r:r+1}, {q:q,r:r+1}];
@@ -717,54 +737,66 @@
              return allMatches;
         }
 
+        // --- SISTEMA DE ENCAIXE COM DELAY (Evita pontuar sem o jogador ver a peça travar na mesa) ---
         function processPlacement(baseCoords, block) {
+            isProcessing = true; // Impede interações enquanto resolve a jogada
+            
+            // 1. Encaixa e RENDERIZA a peça imediatamente
             block.shape.forEach((node, idx) => {
                 board.get(`${baseCoords.q + node.q},${baseCoords.r + node.r}`).colorObj = block.colors[idx];
             });
+            playSound('place'); // Dá o clique inicial
 
-            let toDestroy = new Map();
-            let usedBomb = false;
+            // 2. Espera um pouco (300ms) para gerar a satisfação visual do encaixe, E DEPOIS explode/pontua.
+            setTimeout(() => {
+                let toDestroy = new Map();
+                let usedBomb = false;
 
-            block.shape.forEach((node, idx) => {
-                let q = baseCoords.q + node.q; let r = baseCoords.r + node.r; let color = block.colors[idx];
-                if (color.type === 'bomb') {
-                    usedBomb = true;
-                    toDestroy.set(`${q},${r}`, {q, r});
-                    getNeighbors(q, r).forEach(n => {
-                        if (board.has(`${n.q},${n.r}`) && board.get(`${n.q},${n.r}`).colorObj) {
-                            toDestroy.set(`${n.q},${n.r}`, {q: n.q, r: n.r});
+                block.shape.forEach((node, idx) => {
+                    let q = baseCoords.q + node.q; let r = baseCoords.r + node.r; let color = block.colors[idx];
+                    
+                    if (color.type === 'bomb') {
+                        usedBomb = true;
+                        toDestroy.set(`${q},${r}`, {q, r});
+                        getNeighbors(q, r).forEach(n => {
+                            if (board.has(`${n.q},${n.r}`) && board.get(`${n.q},${n.r}`).colorObj) {
+                                toDestroy.set(`${n.q},${n.r}`, {q: n.q, r: n.r});
+                            }
+                        });
+                    } else {
+                        let matches = getMatchesFor(q, r);
+                        matches.forEach(m => toDestroy.set(`${m.q},${m.r}`, m));
+                    }
+                });
+
+                if (toDestroy.size > 0) {
+                    playSound(usedBomb ? 'bomb' : 'match'); // Som de pontuação apenas se combinar
+                    
+                    let numDestroyed = toDestroy.size;
+                    let pts = (numDestroyed * 10) + (numDestroyed > 3 ? (numDestroyed - 3) * 15 : 0);
+                    let ptsPerHex = pts / numDestroyed;
+
+                    toDestroy.forEach((hex, key) => {
+                        let h = board.get(key);
+                        if (h && h.colorObj) {
+                            if (!h.colorObj.type) {
+                                colorScores[h.colorObj.top] = (colorScores[h.colorObj.top] || 0) + ptsPerHex;
+                            }
+                            animatingPieces.push({ q: hex.q, r: hex.r, colorObj: h.colorObj, scale: 1, alpha: 1, angle: 0 });
+                            h.colorObj = null; // Remove a peça do tabuleiro para ela sumir
                         }
                     });
-                } else {
-                    let matches = getMatchesFor(q, r);
-                    matches.forEach(m => toDestroy.set(`${m.q},${m.r}`, m));
+                    
+                    addScore(pts);
                 }
-            });
 
-            if (toDestroy.size > 0) {
-                playSound(usedBomb ? 'bomb' : 'match');
+                refillTray();
+                isProcessing = false; // Libera interações
                 
-                let numDestroyed = toDestroy.size;
-                let pts = (numDestroyed * 10) + (numDestroyed > 3 ? (numDestroyed - 3) * 15 : 0);
-                let ptsPerHex = pts / numDestroyed;
+                // Valida o Fim de Jogo apenas após a tela e os blocos estabilizarem
+                if (checkGameOver()) showGameOver();
 
-                toDestroy.forEach((hex, key) => {
-                    let h = board.get(key);
-                    // Armazena pontos apenas se for uma cor normal (ignora bombas/coringas no visual final)
-                    if (h.colorObj && !h.colorObj.type) {
-                        colorScores[h.colorObj.top] = (colorScores[h.colorObj.top] || 0) + ptsPerHex;
-                    }
-                    animatingPieces.push({ q: hex.q, r: hex.r, colorObj: h.colorObj, scale: 1, alpha: 1, angle: 0 });
-                    h.colorObj = null;
-                });
-                
-                addScore(pts);
-            } else {
-                playSound('place');
-            }
-
-            refillTray();
-            if (checkGameOver()) showGameOver();
+            }, 300); 
         }
 
         function addScore(pts) {
@@ -790,14 +822,12 @@
         }
 
         function checkGameOver() {
-            // Verifica Bandeja Inferior + Slots Especiais
             let piecesToCheck = [];
             tray.forEach(p => { if (p) piecesToCheck.push(p); });
             specialSlots.forEach(s => { if (s && s.colors) piecesToCheck.push(s); });
             
             if (piecesToCheck.length === 0) return false;
 
-            // Testa todas as peças em todos os hexágonos do tabuleiro
             for (let piece of piecesToCheck) {
                 for (let [key, hex] of board) {
                     let canPlace = true;
@@ -808,19 +838,18 @@
                             break;
                         }
                     }
-                    if (canPlace) return false; // Encontrou um lugar, jogo continua
+                    if (canPlace) return false; 
                 }
             }
-            return true; // Fim de jogo, nenhuma peça cabe em nenhum lugar
+            return true; 
         }
 
         function showGameOver() {
             isPlaying = false;
             playSound('gameover');
             
-            // Monta o DOM dos scores
             colorScoresContainer.innerHTML = '';
-            let validColors = Object.keys(colorScores).sort((a,b) => colorScores[b] - colorScores[a]); // Ordena do maior pro menor
+            let validColors = Object.keys(colorScores).sort((a,b) => colorScores[b] - colorScores[a]); 
             
             validColors.forEach(color => {
                 let row = document.createElement('div');
@@ -842,7 +871,6 @@
 
             gameOverScreen.classList.remove('hidden');
 
-            // Animação de subida dos números
             let duration = 2000;
             let startTime = performance.now();
             let totalEl = document.getElementById('finalScore');
@@ -854,7 +882,7 @@
                 if (progress >= 1) {
                     progress = 1;
                     clearInterval(tickSoundInterval);
-                    playSound('btn'); // Toca o som de encerramento
+                    playSound('btn'); 
                 }
                 
                 totalEl.innerText = Math.floor(score * progress);
