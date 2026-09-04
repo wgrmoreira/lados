@@ -176,7 +176,7 @@
             transform: translate(-50%, -50%) scale(0.5);
             font-weight: 900;
             opacity: 0;
-            pointer-events: none !important; /* Força os toques passarem através do texto */
+            pointer-events: none !important;
             z-index: 50;
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-align: center;
@@ -260,7 +260,8 @@
         <div class="modal">
             <h2 style="color: #ff5a5a;">Fim da Linha!</h2>
             <div id="color-scores-container">
-                </div>
+                <!-- Preenchido dinamicamente via JS -->
+            </div>
             <div class="total-score-text">Total: <span id="finalScore">0</span></div>
             <button onclick="resetGame()" style="background: linear-gradient(135deg, #ff5a5a, #ff9b5a);">Tentar Novamente</button>
         </div>
@@ -300,8 +301,9 @@
         
         let width, height;
         
-        const gridSize = 36; 
-        const drawSizeOffset = 4; 
+        // --- REDUÇÃO DE 20% DO TAMANHO (De 36 para 29) ---
+        const gridSize = 29; 
+        const drawSizeOffset = 3; 
         const boardRadius = 3; 
         const scaleY = 0.75; 
         
@@ -317,7 +319,7 @@
         highScoreDisplay.innerText = highScore;
         
         let isPlaying = false;
-        let isProcessing = false; // Trava o toque enquanto a peça finaliza o encaixe
+        let isProcessing = false; 
         let animatingPieces = [];
         let scoreAnimInterval = null;
 
@@ -487,12 +489,12 @@
                 ctx.closePath();
                 ctx.fillStyle = 'rgba(21, 23, 38, 0.6)'; 
                 ctx.fill();
-                ctx.lineWidth = size * 0.22;
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+                
+                // LINHA FINA BRANCA PARA VISIBILIDADE NO ESCURO
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.stroke();
-                ctx.lineWidth = size * 0.08;
-                ctx.strokeStyle = 'rgba(10, 10, 20, 0.8)';
-                ctx.stroke();
+
                 ctx.restore();
                 return;
             }
@@ -537,8 +539,6 @@
         }
 
         function getTrayPositions() {
-            // Bandeja levemente deslocada para a esquerda (0.14, 0.44, 0.74) 
-            // para evitar corte na direita em telas menores.
             return [ { x: width * 0.14, y: height - 120 }, { x: width * 0.44, y: height - 120 }, { x: width * 0.74, y: height - 120 } ];
         }
 
@@ -688,7 +688,6 @@
             draggingBlock = null;
         }
 
-        // Os eventos de touchcancel evitam peças ficarem presas caso um engasgo cancele o evento (ex. popup)
         canvas.addEventListener('mousedown', handleDown);
         canvas.addEventListener('mousemove', handleMove);
         window.addEventListener('mouseup', handleUp);
@@ -739,15 +738,13 @@
         }
 
         function processPlacement(baseCoords, block) {
-            isProcessing = true; // Bloqueia toque
+            isProcessing = true; 
             
-            // 1. Encaixe imediato visual
             block.shape.forEach((node, idx) => {
                 board.get(`${baseCoords.q + node.q},${baseCoords.r + node.r}`).colorObj = block.colors[idx];
             });
             playSound('place');
 
-            // 2. Delay para apreciar o encaixe antes de avaliar combinação
             setTimeout(() => {
                 try {
                     let toDestroy = new Map();
@@ -789,13 +786,13 @@
                         addScore(pts);
                     }
                 } catch(e) {
-                    console.error("Erro no processo de pontuação", e);
+                    console.error(e);
                 } finally {
                     refillTray();
-                    isProcessing = false; // Libera toque
+                    isProcessing = false; 
                     if (checkGameOver()) showGameOver();
                 }
-            }, 150); // Delay curto
+            }, 150); 
         }
 
         function addScore(pts) {
