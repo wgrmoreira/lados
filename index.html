@@ -169,7 +169,7 @@
             font-weight: 900;
         }
 
-        /* --- POPUPS NO JOGO --- */
+        /* --- POPUPS NO JOGO (CORRIGIDOS E REFORÇADOS) --- */
         .popup-text {
             position: absolute;
             left: 50%;
@@ -177,7 +177,7 @@
             font-weight: 900;
             opacity: 0;
             pointer-events: none !important;
-            z-index: 50;
+            z-index: 1000 !important; /* Forçado para ficar na frente de tudo */
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-align: center;
             width: 100%;
@@ -185,20 +185,20 @@
         
         #milestone-popup {
             top: 40%;
-            font-size: 38px;
+            font-size: 42px;
             color: #ffc13b;
-            text-shadow: 0 4px 15px rgba(0,0,0,0.8), 0 0 20px #ffc13b;
+            text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 30px #ffc13b;
         }
-        #milestone-popup.show { opacity: 1; transform: translate(-50%, -80%) scale(1); }
+        #milestone-popup.show { opacity: 1; transform: translate(-50%, -120%) scale(1); }
 
         #special-popup {
-            top: 25%;
-            font-size: 32px;
+            top: 30%;
+            font-size: 34px;
         }
-        #special-popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        #special-popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
         
-        .text-coringa { color: #ffffff; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 25px rgba(255,255,255,0.8); }
-        .text-buraco { color: #555555; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 25px #ff0000; }
+        .text-coringa { color: #ffffff; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 30px rgba(255,255,255,0.9); }
+        .text-buraco { color: #888888; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 30px #ff0000; }
 
         /* --- HUD DO JOGO --- */
         header {
@@ -260,8 +260,7 @@
         <div class="modal">
             <h2 style="color: #ff5a5a;">Fim da Linha!</h2>
             <div id="color-scores-container">
-                <!-- Preenchido dinamicamente via JS -->
-            </div>
+                </div>
             <div class="total-score-text">Total: <span id="finalScore">0</span></div>
             <button onclick="resetGame()" style="background: linear-gradient(135deg, #ff5a5a, #ff9b5a);">Tentar Novamente</button>
         </div>
@@ -301,7 +300,6 @@
         
         let width, height;
         
-        // --- REDUÇÃO DE 20% DO TAMANHO (De 36 para 29) ---
         const gridSize = 29; 
         const drawSizeOffset = 3; 
         const boardRadius = 3; 
@@ -315,13 +313,15 @@
         let nextSpecialScore = 1000;
         let lastMilestone = 0;
         
-        let highScore = localStorage.getItem('ladosHighScore') || 0;
+        let highScore = Number(localStorage.getItem('ladosHighScore')) || 0;
         highScoreDisplay.innerText = highScore;
         
         let isPlaying = false;
         let isProcessing = false; 
         let animatingPieces = [];
         let scoreAnimInterval = null;
+        let milestoneTimeout = null;
+        let specialTimeout = null;
 
         let stars = [];
         let comets = [];
@@ -399,6 +399,15 @@
                 osc.type = 'triangle'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now + 1.2);
                 gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
                 osc.start(now); osc.stop(now + 1.2);
+            } else if (type === 'milestone') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(500, now); osc.frequency.linearRampToValueAtTime(1000, now + 0.2);
+                osc.frequency.linearRampToValueAtTime(1500, now + 0.4);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.4);
+                osc.start(now); osc.stop(now + 0.4);
+            } else if (type === 'special') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(800, now); osc.frequency.linearRampToValueAtTime(1200, now + 0.3);
+                gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
             }
         }
 
@@ -443,6 +452,35 @@
             isPlaying = true;
             resetGameLogic();
         };
+
+        // --- SISTEMA DE POPUPS (ROBUSTO) ---
+        function showMilestonePopup() {
+            clearTimeout(milestoneTimeout);
+            playSound('milestone');
+            const phrase = PRAISE_PHRASES[Math.floor(Math.random() * PRAISE_PHRASES.length)];
+            milestonePopup.innerText = phrase;
+            
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    milestonePopup.classList.add('show');
+                });
+            });
+            milestoneTimeout = setTimeout(() => milestonePopup.classList.remove('show'), 1500);
+        }
+
+        function showSpecialPopup(isBomb) {
+            clearTimeout(specialTimeout);
+            playSound('special');
+            specialPopup.className = `popup-text ${isBomb ? 'text-buraco' : 'text-coringa'}`;
+            specialPopup.innerText = isBomb ? "Buraco Negro!" : "Peça Coringa!";
+            
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    specialPopup.classList.add('show');
+                });
+            });
+            specialTimeout = setTimeout(() => specialPopup.classList.remove('show'), 2000);
+        }
 
         // --- MATEMÁTICA HEXAGONAL ---
         function getHexCenter(q, r, offsetX, offsetY, customSize = gridSize) {
@@ -489,17 +527,22 @@
                 ctx.closePath();
                 ctx.fillStyle = 'rgba(21, 23, 38, 0.6)'; 
                 ctx.fill();
-                
-                // LINHA FINA BRANCA PARA VISIBILIDADE NO ESCURO
                 ctx.lineWidth = 1.5;
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // Linha fina branca nos vãos vazios
                 ctx.stroke();
-
                 ctx.restore();
                 return;
             }
 
-            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            // Destaque brilhante em volta se for peça especial
+            if (colorObj.type === 'bomb') {
+                ctx.shadowColor = 'rgba(255, 0, 0, 0.8)';
+            } else if (colorObj.type === 'wildcard') {
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+            } else {
+                ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            }
+            
             ctx.shadowBlur = 10;
             ctx.shadowOffsetY = 8;
 
@@ -795,8 +838,9 @@
             }, 150); 
         }
 
+        // --- SISTEMA DE PONTUAÇÃO (TOTALMENTE SEGURO COM NÚMEROS) ---
         function addScore(pts) {
-            score += pts;
+            score = Number(score) + Number(pts);
             scoreDisplay.innerText = score;
             
             if (score > highScore) {
